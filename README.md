@@ -48,6 +48,18 @@ Frames are taken from the camera's own memory pipeline, plus the complete contro
 
 > 这里只写“怎么做成”，不写失败路线 / Only the working path is documented here, not the dead ends.
 
+### 二·补、2026-11-19 追加突破 / Additional breakthroughs (2026-11-19)
+
+详见 / see [`docs/breakthrough-2026-11-19.md`](docs/breakthrough-2026-11-19.md)。
+
+| 项 / Item | 结果 / Result |
+|---|---|
+| 条带几何 / Strip geometry | 整帧被切成 **32 条 2048×32 横条**，每条独立 H.264 流；SPS 改 2048×32 后真 IDR **零 concealing** / the frame is 32 strips of 2048×32, each an independent stream; a real IDR decodes with **zero concealing** once the SPS is set to 2048×32 |
+| 关键帧通道 / Keyframe channel | **关键帧通道 = 视频通道 + 0x20**（0x3a/0x3b/0x3f 自带 SPS+PPS+IDR）/ keyframe channel = video channel + 0x20 |
+| 关键帧命令 / Keyframe command | **DUML cmd_id 0x38** 已破解，造包 CRC 对真机 **3/3 逐字节匹配** / cmd 0x38 cracked, builder byte-exact 3/3 against real packets |
+| 连续取流 / Continuous capture | 单通道 **100% 帧覆盖、40 秒不断、589–592 包/秒恒定**（约 950KB/s）/ single channel 100% coverage, 40 s gapless, steady 589–592 pkt/s |
+| 实时音频 / Live audio | `regular0` 原生 **4ch s24-32le**，**ch0/ch2 为真实麦克风** / native 4-channel s24-32le; ch0/ch2 are the real mics |
+
 ---
 
 ## 三、设备文件与系统结构 / Device layout and system structure
@@ -195,6 +207,35 @@ mount -t exfat /dev/mmcblk1p1 /mnt/media_rw/sd
 df -h /mnt/media_rw/sd
 ```
 
+### 4.7 条带几何与关键帧通道 / Strip geometry and keyframe channels
+
+**中文** — 用 `sps_retool.py` 把 SPS 宽高改成 2048×32（`rebuild(sps,128,2)`），保留相机原 PPS；
+用 `hi_ch.py` 提取 ≥0x28 的关键帧通道（= 视频通道 + 0x20）；用 `gen38.py` 的 `build38(seq)` 周期发送
+0x38 关键帧请求；`lv_full.py` 把“握手 + 0x92 循环 + 0x38 + ACK”四线程合在一起，可拿到 100% 连续单通道流。
+
+**English** — Use `sps_retool.py` to rewrite the SPS to 2048×32 (`rebuild(sps,128,2)`), keeping the camera
+PPS; `hi_ch.py` extracts the keyframe channels (≥0x28, = video channel + 0x20); `gen38.py`'s `build38(seq)`
+sends periodic 0x38 keyframe requests; `lv_full.py` combines handshake + 0x92 cycle + 0x38 + ACK in four
+threads to obtain a 100% continuous single-channel stream.
+
+```bash
+python probe/hi_ch.py samples/capture.pcap        # 找关键帧通道 / find keyframe channels
+python probe/gen38.py                              # 自验 0x38 造包 3/3 / self-check 3/3
+python probe/sps_retool.py                         # 列出各高度 SPS / list SPS per height
+```
+
+### 4.8 实时麦克风音频 / Live microphone audio
+
+**中文** — `regular0` 原生 4ch s24-32le，**ch0/ch2 是真实麦克风**。只采集、不播放：
+
+**English** — `regular0` is natively 4-channel s24-32le; **ch0/ch2 are the real mics**. Capture only, never play:
+
+```bash
+timeout 4 parec --raw --rate=48000 --channels=4 --format=s32le -d regular0 /dev/shm/aud4.raw
+python probe/aud_rms.py aud4.raw 4                 # 逐声道 RMS / per-channel RMS
+python probe/aud_extract.py aud4.raw mic.wav       # ch0+ch2 -> 立体声 wav / stereo wav
+```
+
 ---
 
 ## 五、协议要点 / Protocol essentials
@@ -217,11 +258,19 @@ Uplink magic `80 40 34`, downlink `80 0e 8a`; `[6]` is `0x05` request / `0x04` A
 ```
 docs/预览总文档.md             中文详细文档 / detailed guide (Chinese)
 docs/preview-guide-en.md       English detailed guide
+docs/breakthrough-2026-11-19.md  2026-11-19 追加突破（中英）/ additional breakthroughs (bilingual)
 probe/gate_off.py              关闸门 / gate patch (idempotent, verifies original bytes)
 probe/lv_fix.py                最小客户端 / minimal client
+probe/lv_full.py               完整客户端：握手+0x92+0x38+ACK / full client
 probe/ch_sum.py                通道统计 / per-channel SPS & IDR offsets
 probe/cut_from.py              切片出 ES 流 / slice the elementary stream
 probe/oneshot.sh               一键跑完整套 / one-shot pipeline
+probe/sps_retool.py            SPS 宽高字段重写 / rewrite SPS width/height
+probe/gen38.py                 0x38 关键帧请求造包 / build 0x38 keyframe request
+probe/hi_ch.py                 提取关键帧通道 / extract keyframe channels
+probe/cmd_time.py              命令与关键帧因果对齐 / command/keyframe causal alignment
+probe/aud_rms.py               音频逐声道 RMS / per-channel audio RMS
+probe/aud_extract.py           提取真实麦克风 wav / extract real-mic wav
 ```
 
 ---
