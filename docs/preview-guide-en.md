@@ -168,7 +168,6 @@ Mount the card before recording: `mkdir -p /mnt/media_rw/sd && mount -t exfat /d
 (This sentence was not written by AI.)
 All of the above requires operating on your Osmo 360 **with the device unlocked**. You can search Bilibili for the
 DJI Action 5 Pro unlocking video **BV1qr3t6MEGV** published by **@凛青Linnea**.
-(This sentence was not written by AI either.)
 
 ## 12. Disclaimer, again
 

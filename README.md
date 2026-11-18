@@ -221,6 +221,7 @@ probe/gate_off.py              关闸门 / gate patch (idempotent, verifies orig
 probe/lv_fix.py                最小客户端 / minimal client
 probe/ch_sum.py                通道统计 / per-channel SPS & IDR offsets
 probe/cut_from.py              切片出 ES 流 / slice the elementary stream
+probe/oneshot.sh               一键跑完整套 / one-shot pipeline
 ```
 
 ---
@@ -244,12 +245,10 @@ probe/cut_from.py              切片出 ES 流 / slice the elementary stream
 （本句不是AI写的）
 以上都需要你在你的 osmo360 设备解锁的情况下操作，你可以在 bilibili 上搜索 @凛青Linnea 发布的
 DJI action5pro 的解锁方式的视频 BV1qr3t6MEGV
-（本句也不是）
 
 (This sentence was not written by AI.)
 All of the above requires operating on your Osmo 360 **with the device unlocked**. You can search Bilibili for the
 DJI Action 5 Pro unlocking video **BV1qr3t6MEGV** published by **@凛青Linnea**.
-(This sentence was not written by AI either.)
 
 ---
 
