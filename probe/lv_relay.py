@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # lv_relay.py —— 相机端预览中继（proven 流控 + 双鱼眼组帧 + TCP 视频/控制服务）
-# 流控沿用 lv_pipe6（手机握手订阅 + 52ms 周期请求 + ACKN=4 大端计数 ACK）
-# 组帧沿用 pc_recv7（k=d[17]>>7 左右鱼眼，i=d[18] 帧内包序，缺包整帧丢弃）
+# 流控：手机握手订阅 + 周期请求 + 分批 ACK
+# 组帧：k=d[17]>>7 左右鱼眼，i=d[18] 帧内包序
 # 参数集 SPS0(2048x1024)+CABAC PPS 68ee06f2c0（与手机预览逐字节一致）
 # 运行：python3 lv_relay.py /dev/shm/mimo.pcap [ACKN]
 import struct, sys, time, socket, select, threading, queue, collections, os
@@ -44,6 +44,9 @@ st = {"big": 0, "ack": 0, "req": 0, "ok": 0, "drop": 0, "gap": 0}
 seqv = [0]; lk = threading.Lock()
 cq = queue.Queue()
 state = {"ackn": ACKN, "reqms": 0.052, "kf": False, "rehand": True, "idr": 0}
+# 最近一次关键帧缓存（每只眼），供新接入的客户端补发
+idr_cache = {0: b"", 1: b""}
+lk_cache = threading.Lock()
 
 
 def put(p):
@@ -76,6 +79,15 @@ def video_server():
         c, _ = s.accept()
         try: c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except OSError: pass
+        # 新客户端接入：先把缓存的 IDR 补发，再进实时流。
+        # 这样连上即有参考帧，不必“恰好在编码器创建瞬间连着”。
+        with lk_cache:
+            for k in (0, 1):
+                body = idr_cache[k]
+                if body:
+                    nal = PARAM + body
+                    try: c.sendall(b"\x01" + bytes([k]) + struct.pack("<I", len(nal)) + nal)
+                    except OSError: break
         with cl_lock: clients.append(c)
 
 
@@ -105,10 +117,11 @@ def handle_cmd(cmd, c):
     op = parts[0].lower()
     if op == "help":
         reply = ("命令: stat 状态 | kick 重启camera3逼IDR | rehand 重发握手 | "
-                 "ackn <n> ACK批量 | reqms <s> 请求间隔 | kf 请求关键帧")
+                 "ackn <n> ACK批量 | reqms <s> 请求间隔 | kf 请求关键帧 | idr 清空缓存")
     elif op == "stat":
-        reply = "big=%d ok=%d drop=%d gap=%d idr=%d ack=%d req=%d clients=%d ackn=%d" % (
-            st["big"], st["ok"], st["drop"], st["gap"], state["idr"], st["ack"], st["req"], len(clients), state["ackn"])
+        reply = "big=%d ok=%d drop=%d gap=%d idr=%d ack=%d req=%d clients=%d ackn=%d cache=%d/%d" % (
+            st["big"], st["ok"], st["drop"], st["gap"], state["idr"], st["ack"], st["req"],
+            len(clients), state["ackn"], len(idr_cache[0]), len(idr_cache[1]))
     elif op == "kick":
         threading.Thread(target=lambda: (os.system("systemctl restart dji_camera3"),
                                          time.sleep(3), state.__setitem__("rehand", True)), daemon=True).start()
@@ -119,6 +132,10 @@ def handle_cmd(cmd, c):
         state["ackn"] = max(1, int(parts[1])); reply = "ackn=%d" % state["ackn"]
     elif op == "reqms" and len(parts) > 1:
         state["reqms"] = float(parts[1]); reply = "reqms=%.4f" % state["reqms"]
+    elif op == "idr":
+        with lk_cache:
+            idr_cache[0] = b""; idr_cache[1] = b""
+        reply = "已清空 IDR 缓存"
     elif op == "kf":
         try:
             from gen38 import build38
@@ -132,7 +149,7 @@ def handle_cmd(cmd, c):
 
 
 def sender():
-    # 周期性完整重放握手（仿 lv_fix）：持续重订阅以捕获编码器重建时的 IDR
+    # 周期性完整重放握手：持续重订阅，配合 kick 在编码器重建时接住 IDR
     while True:
         t0 = time.time(); i = 0; last = 0
         while True:
@@ -172,15 +189,28 @@ ch = {0: {"cur": b"", "have": False, "bad": False, "prev": None},
       1: {"cur": b"", "have": False, "bad": False, "prev": None}}
 
 
+def _has_param(body, tag):
+    """帧头 128 字节内找起始码 + NAL 类型（IDR=0x65 / SPS=0x67）。"""
+    return (b"\x00\x00\x00\x01" + tag) in body[:128]
+
+
 def flush(k):
     c = ch[k]
     if not c["have"]: return
-    if c["bad"]:
+    body = c["cur"]
+    # 关键：IDR/SPS 帧即使有缺口也必须发。
+    # 灰屏的真因就在这里：IDR 帧最长、最容易缺口，按“缺包整帧丢弃”会把唯一的 IDR 永远丢掉，
+    # 后续 P 帧没有参考帧 -> 灰。允许带缺口送达：第一帧局部花，后续立刻恢复。
+    is_key = _has_param(body, b"\x65") or _has_param(body, b"\x67")
+    if is_key:
+        state["idr"] += 1
+        with lk_cache:
+            idr_cache[k] = body          # 缓存最近关键帧，供后接入的客户端补发
+    if c["bad"] and not is_key:
         st["drop"] += 1
     else:
-        body = c["cur"]
-        if b"\x00\x00\x00\x01\x65" in body[:64] or b"\x00\x00\x00\x01\x67" in body[:64]:
-            state["idr"] += 1
+        if c["bad"]:
+            st["drop"] += 1          # 仍然计入缺口统计，但照发
         nal = PARAM + body
         broadcast(b"\x01" + bytes([k]) + struct.pack("<I", len(nal)) + nal)
         st["ok"] += 1
@@ -206,8 +236,11 @@ def receiver():
                 c["cur"] = d[19:]; c["have"] = True; c["prev"] = 0
             else:
                 if not c["have"]: continue
-                if c["prev"] is not None and i != (c["prev"] + 1) & 0xFF:
-                    st["gap"] += 1; c["bad"] = True
+                if c["prev"] is not None:
+                    if i == c["prev"]:
+                        continue                      # 重复包，忽略，不算缺口
+                    if i != (c["prev"] + 1) & 0xFF:
+                        st["gap"] += 1; c["bad"] = True
                 c["cur"] += d[19:]; c["prev"] = i
 
 
