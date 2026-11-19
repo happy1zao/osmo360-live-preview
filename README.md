@@ -60,6 +60,18 @@ Frames are taken from the camera's own memory pipeline, plus the complete contro
 | 连续取流 / Continuous capture | 单通道 **100% 帧覆盖、40 秒不断、589–592 包/秒恒定**（约 950KB/s）/ single channel 100% coverage, 40 s gapless, steady 589–592 pkt/s |
 | 实时音频 / Live audio | `regular0` 原生 **4ch s24-32le**，**ch0/ch2 为真实麦克风** / native 4-channel s24-32le; ch0/ch2 are the real mics |
 
+### 二·补2、2026-11-20 工程化落地 / Engineering landed (2026-11-20)
+
+详见 / see [`docs/breakthrough-2026-11-20.md`](docs/breakthrough-2026-11-20.md)。
+
+| 项 / Item | 结果 / Result |
+|---|---|
+| 两路流厘清 / Two streams separated | **预览小流 = 2048×1024 整帧双鱼眼 + CABAC**（手机画面）；全景分片流 = 2048×32×32 + CAVLC，二者 SPS/PPS 完全不同 / preview small stream = full 2048×1024 dual-fisheye CABAC (the phone picture); panorama strips = 2048×32×32 CAVLC, distinct SPS/PPS |
+| 干净解码自证 / Clean decode proven | IDR 起始样本用 SPS0+`68ee06f2c0` 解出**完全干净双鱼眼**（人物/显示器/书架清晰）/ an IDR-started sample decodes to a perfectly clean dual-fisheye image |
+| CAVLC PPS / CAVLC PPS | 扫出全景流最佳 PPS `68ce3880`；关键 `deblocking_filter_control_present_flag=0` / best panorama PPS `68ce3880`; deblock flag must be 0 |
+| 通用 CRC / Generic CRC | `crc16(0x3692,0x8408)` over `DUML[0:-2]` 匹配所有长度；可把手机配置命令注入本会话 / matches all lengths; phone config commands can be injected into the local session |
+| 本地播放器 / Local player | `preview.py` 打开即见预览窗口 + `help` 控制台；`start_preview.bat` 一键启动 / open-and-see preview window + `help` console; one-click launcher |
+
 ---
 
 ## 三、设备文件与系统结构 / Device layout and system structure
@@ -236,6 +248,28 @@ python probe/aud_rms.py aud4.raw 4                 # 逐声道 RMS / per-channel
 python probe/aud_extract.py aud4.raw mic.wav       # ch0+ch2 -> 立体声 wav / stereo wav
 ```
 
+### 4.9 本地预览播放器 + 控制台 / Local preview player + console
+
+**中文** — 最简单的用法：相机端起中继，PC 端开窗口。
+
+```bat
+:: 一键（推脚本 + 起中继 + 开预览窗口）/ one-click
+start_preview.bat
+:: 或手动 / or manually
+adb shell sh /data/local/tmp/run_relay.sh
+python preview.py
+:: 无需相机，回放干净双鱼眼样本 / replay a clean sample without the camera
+python preview.py --file samples\live20.h264
+```
+
+窗口打开后，在控制台输入 `help`：
+`stat`（统计）/ `kick`（重启 camera3 逼 IDR）/ `rehand`（重握手）/ `ackn <n>` / `reqms <s>` / `kf` / `save`（截图）/ `quit`。
+
+**English** — Easiest path: start the relay on the camera, open the window on the PC.
+Run `start_preview.bat` (one-click), or `run_relay.sh` then `python preview.py`.
+`python preview.py --file samples/live20.h264` replays a clean dual-fisheye capture without the camera.
+In the console type `help`: `stat / kick / rehand / ackn <n> / reqms <s> / kf / save / quit`.
+
 ---
 
 ## 五、协议要点 / Protocol essentials
@@ -244,24 +278,38 @@ python probe/aud_extract.py aud4.raw mic.wav       # ch0+ch2 -> 立体声 wav / 
 `p[16]` 类型、`p[17]` 通道号、`p[18]` 通道内序号。内层是 DUML：
 `55 <len> <crc8> <发送方> <接收方> <seq 2B> <flags> <cmd_set> <cmd_id> <payload> <crc16>`。
 上行 magic `80 40 34`，下行 magic `80 0e 8a`；`[6]` 为 `0x05` 请求 / `0x04` ACK / `0x00` 保活。
+通用 DUML CRC = `crc16(init=0x3692, poly=0x8408)` over `DUML[0:-2]`。
 
 **English** — Downstream large packets are 1472 bytes; strip the wrapper as `p[19:]` when
 `p[19:23] == 00 00 00 01`, otherwise `p[20:]`. Field map: `p[16]` type, `p[17]` channel,
 `p[18]` sequence within the channel. Inside is DUML:
 `55 <len> <crc8> <sender> <receiver> <seq 2B> <flags> <cmd_set> <cmd_id> <payload> <crc16>`.
 Uplink magic `80 40 34`, downlink `80 0e 8a`; `[6]` is `0x05` request / `0x04` ACK / `0x00` keep-alive.
+Generic DUML CRC = `crc16(init=0x3692, poly=0x8408)` over `DUML[0:-2]`.
 
 ---
 
 ## 六、仓库结构 / Repository layout
 
 ```
+preview.py                     PC 预览窗口 + help 控制台 / PC preview window + console
+start_preview.bat              一键启动 / one-click launcher
 docs/预览总文档.md             中文详细文档 / detailed guide (Chinese)
 docs/preview-guide-en.md       English detailed guide
 docs/breakthrough-2026-11-19.md  2026-11-19 追加突破（中英）/ additional breakthroughs (bilingual)
+docs/breakthrough-2026-11-20.md  2026-11-20 工程化落地（中英）/ engineering landed (bilingual)
+probe/lv_relay.py              相机端预览中继（流控+组帧+TCP服务）/ camera relay
+probe/run_relay.sh             起中继 / start relay
+probe/kill_relay.sh            停中继 / stop relay
 probe/gate_off.py              关闸门 / gate patch (idempotent, verifies original bytes)
 probe/lv_fix.py                最小客户端 / minimal client
 probe/lv_full.py               完整客户端：握手+0x92+0x38+ACK / full client
+probe/lv_pipe6.py              原始转发客户端 / raw forwarding client
+probe/reasm5.py                全景分片重组器 / panorama strip reassembler
+probe/pc_recv7.py              预览小流重组器 / preview small-stream reassembler
+probe/pps_find.py              PPS 搜索 / PPS search
+probe/build_cfg.py             通用 CRC 造配置包 / config packet builder
+probe/extract_cfg.py           提取手机配置命令 / extract phone config commands
 probe/ch_sum.py                通道统计 / per-channel SPS & IDR offsets
 probe/cut_from.py              切片出 ES 流 / slice the elementary stream
 probe/oneshot.sh               一键跑完整套 / one-shot pipeline
