@@ -1,60 +1,71 @@
-# Osmo 360（OQ101 / Archway）逆向实验台
+# osmo360-live-preview
 
-> 目标设备：DJI Osmo 360 一代，机型 **OQ101** / 代号 **Archway** / 平台 **QCS8550**
-> 系统：QTI Linux（Debian 底 + systemd），内核 5.15.148，USB-C ADB 已 root。
-> 研究性质：自有设备上的互操作与个人研究；不含授权绕过、DRM 破解或固件分发。
+Osmo 360（一代）2:1 双鱼眼实时预览与离线分析工具集：在 PC 上取得相机预览流，
+不依赖手机 App、不截屏、不拍屏。
 
-**先读这两份，其余按需：**
+> **免责声明**：仅供学习与研究，仅限在本人合法持有且获准改造的设备上使用。
+> 手法只修改运行中进程内存，不写磁盘、不刷固件，重启服务即恢复。与 DJI 无隶属关系。
 
-| 文档 | 用途 |
-|---|---|
-| [`docs/00_START_HERE.md`](docs/00_START_HERE.md) | 一页上手：机器是什么、现在能做什么、命令怎么跑、目录在哪 |
-| [`docs/01_STATUS.md`](docs/01_STATUS.md) | 进度快照：已验证 / 进行中 / 已判死 / 未决问题 |
+## 快速开始
 
-（旧的 `docs/00_总索引.md` 与 `HANDOFF.md` 只覆盖到第八轮，**已过时**，留作过程档案。）
+```bat
+git clone https://github.com/happy1zao/osmo360-live-preview.git
+cd osmo360-live-preview
+py -3 -m pip install -r requirements.txt
+py -3 -c "import osmo360; print(osmo360.__version__)"
+```
 
----
+前置：`adb` 与 `ffmpeg` 在 PATH 中（或用环境变量 `ADB` / `FFMPEG` 指定路径）；
+相机已 root。设备序列号通过 `ADB_SERIAL` 指定，单设备可留空。
 
-## 这是什么
+### 中继预览（Windows 一键）
 
-不是"给相机做 UI"，而是把它当成**可编程的多模态传感器**：拿得到原始画面、能长期稳定跑、能被脚本化调用。
+```bat
+start_preview.bat
+```
 
-四条硬约束：只走 adb；不破坏 adb；不碰 GUI（会切掉 USB adb）；所有改动可回滚。
+等价手动步骤见 [`docs/00_START_HERE.zh.md`](docs/00_START_HERE.zh.md)。
 
-## 当前能力（2026-11-26，第十九轮）
+### LRF 边写边读 2:1 预览（相机录制中）
 
-| 能力 | 状态 | 入口 |
-|---|---|---|
-| 实时预览（单镜 960×720@30） | ✅ 唯一验证过的实时画面 | `live_preview.bat` |
-| 无 GUI 开录 | ✅ | `dji_cst -m duss_record_*`（见 START_HERE §6） |
-| 4K/1920 采集**真 119.88fps** | ✅ 已审计（1833 帧 / 15.30s） | [`rammer/R01_真120帧审计.md`](rammer/R01_真120帧审计.md) |
-| 2:1 全景实时预览（LRF 边写边读） | 🟡 离线已解出真帧，整链待跑通 | `tools/pc/r148_pano_preview.py` |
-| 直接读机身屏 / GPU 转码 / DPU 回写 / 9004 视频 | ❌ 已判死 | `docs/04_流控闸门与预览工程化/115` |
+```bat
+pano_live.bat
+:: 等价于
+py -3 tools\pc\r156_lrf_live2.py --file auto --secs 3600 --scale 1280
+```
+
+### 设备端探针编译（可选，hook 方案需要）
+
+```sh
+sh probe/build.sh
+```
+
+产物 `probe/libdcam_hook.so` 用 bind mount 部署到 `/usr/lib/libdcam_hook.so`，
+步骤与回滚见 [`probe/README.md`](probe/README.md)。
 
 ## 目录
 
-```
-docs/       00_START_HERE → 01_STATUS → 01..04 四册（编号即阅读顺序）
-rammer/     画质上限专题（真 120 帧审计、采集档位、10bit 链路）
-probe/      设备端探针：C 源码 + 编译产物 + 设备端 python 脚本
-tools/pc/   PC 端分析脚本 r*.py（只增不改）
-osmo360/    PC 端 Python 包（transport / video / session / live）
-samples/    证据与语料（体量大，按主题分目录）
-```
+| 路径 | 内容 |
+|---|---|
+| `osmo360/` | Python 包：`transport`（adb/转发）、`video`（重组/解码）、`audio`（四麦采集）、`control`（相机控制）、`session`（自建会话）、`pipeline`（一键串联）、`live`（实时流） |
+| `probe/` | 设备端 C 探针源码、相机端 Python/Shell 脚本、交叉编译脚本、回滚脚本 |
+| `tools/pc/` | PC 端分析与预览脚本（清单见 [`tools/pc/README.md`](tools/pc/README.md)） |
+| `preview.py` | PC 预览窗口 + 控制控制台 |
+| `samples/` | 样本占位说明；抓包/码流/截图等大文件不入库 |
+| `docs/` | 主动指南、详细原理、轮次归档 |
 
-## 给感知模型用（osmo360 包）
+## 文档
 
-`osmo360/` 目前能给出 2:1 双鱼眼 numpy RGB 帧（来自已验证的解码路径）：
+- [快速上手（中文）](docs/00_START_HERE.zh.md) · [Start Here (English)](docs/00_START_HERE.en.md)
+- [状态与里程碑（中文）](docs/01_STATUS.zh.md) · [Status (English)](docs/01_STATUS.en.md)
+- [预览详细文档（中文）](docs/preview-guide.zh.md) · [Detailed Guide (English)](docs/preview-guide.en.md)
+- [轮次归档](docs/archive/)：早期逆向记录（中文，未提供英文译本）
 
-```python
-from osmo360 import Pipeline
-p = Pipeline()
-for frame in p.offline_frames("samples/live20.h264"):
-    model.infer(frame)          # (1024, 2048, 3) uint8
-```
+## 依赖
 
-## 红线
+Python 第三方包见 [`requirements.txt`](requirements.txt)（`numpy`、`opencv-python`）。
+`adb`、`ffmpeg` 为外部二进制，不在 pip 依赖内。
 
-- 不要 `pkill dji_gui_on_disp0` —— 会切掉 USB adb 模式。
-- 不要改 `dji_media_service.json` 的 `liveview.supportable` —— `dji_media_server` 启动即崩。
-- `dji_camera3` 崩会连带 USB gadget 切大容量存储：**等 3–5 分钟自愈，不要拔插**。
+## 许可
+
+[MIT](LICENSE) © 2026 happy1zao
