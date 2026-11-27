@@ -2,7 +2,8 @@
 
 > For study and research only, on a device you legally own and are allowed to modify.
 > The techniques described only change the memory of a running process: nothing is written
-> to disk, nothing is flashed, and a service restart reverts everything. Not affiliated with DJI.
+> to disk, nothing is flashed, and a service restart reverts everything. Not affiliated
+> with DJI.
 
 ## 1. What this repo does
 
@@ -100,8 +101,8 @@ osmo360-live-preview/
 - [Status & milestones](01_STATUS.en.md): which links work end to end, which are in progress.
 - [Detailed preview guide](preview-guide.en.md): device layout, protocol frame format, the
   two key breakthroughs and why they work.
-- [Round archives](archive/): early reverse-engineering logs (Chinese only; some early
-  scripts referenced there are not shipped with this repo).
+- [Round archives](archive/): early reverse-engineering logs, paired ZH/EN (`.zh.md` / `.en.md`); some early
+  scripts referenced there are not shipped with this repo.
 
 ## 6. Known boundaries
 
