@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """transport —— adb 连接与端口转发管理
 
-关键环境特性（实测）：本执行环境每条 shell 命令结束会回收 adb daemon，
+注意事项（来自早期轮次记录）：每条 shell 命令结束会回收 adb daemon，
 跨命令建立的 `adb forward` 必然丢失。因此凡是需要 forward 的连续操作，
 必须在同一个 Python 进程内完成（本模块即为此设计）。
 
