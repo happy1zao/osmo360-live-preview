@@ -1,0 +1,4 @@
+# PC 端 Python 依赖（设备端脚本用相机自带 python3，无需安装）
+# 仅列出代码里真实 import 的第三方包；ffmpeg / adb 是外部二进制，不在此列。
+numpy>=1.24
+opencv-python>=4.8
