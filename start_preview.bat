@@ -8,11 +8,8 @@ setlocal
 cd /d "%~dp0"
 
 REM ---------- 找 adb ----------
-REM 优先用环境变量 ADB，其次本机已知路径，最后 PATH
+REM 优先环境变量 ADB，其次 PATH 里的 adb
 if not "%ADB%"=="" if exist "%ADB%" goto :adb_ok
-set "ADB=E:\123pan\Downloads\DJIAc5P_UI_Debian-master\DJIAc5P_UI_Debian-master\adb\adb.exe"
-if exist "%ADB%" goto :adb_ok
-REM 再试 PATH 里的 adb（不依赖 where.exe）
 adb version >nul 2>&1
 if not errorlevel 1 (
   set "ADB=adb"
@@ -24,7 +21,6 @@ exit /b 1
 :adb_ok
 
 REM ---------- 找 python ----------
-REM 不依赖 where.exe（部分机器 PATH 里没有 where），直接试着执行
 set "PY=python"
 python --version >nul 2>&1
 if not errorlevel 1 goto :py_ok
@@ -39,15 +35,15 @@ exit /b 1
 
 echo [0/3] 检查设备 ...
 "%ADB%" devices
+
+REM 握手样本（samples/mimo.pcap）属于真机私有抓包，不随仓库提供；
+REM 没有样本不影响中继/预览启动，仅离线回放相关功能不可用。
 if not exist samples\mimo.pcap (
-  echo [错误] 缺少 samples\mimo.pcap 握手样本，请先抓包。
-  pause
-  exit /b 1
+  echo [提示] 缺少 samples\mimo.pcap 握手样本（私有抓包，未入库）；继续启动中继。
 )
 
 echo [1/3] 推送相机端脚本 ...
 "%ADB%" push probe\lv_relay.py probe\run_relay.sh probe\kill_relay.sh probe\gen38.py probe\gate_off.py /data/local/tmp/ >nul
-"%ADB%" push samples\mimo.pcap /dev/shm/mimo.pcap >nul
 
 echo [2/3] 启动相机端中继（视频5010 / 控制5011）...
 REM 先单独停旧中继（此行不含 lv_relay 字样，不会被 kill_relay.sh 误伤）
