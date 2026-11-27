@@ -3,7 +3,7 @@
 # 用法：python preview.py [--adb 路径] [--width 1024] [--no-forward]
 #       python preview.py --file samples/live20.h264          # 回放，立刻看到干净双鱼眼
 #       python preview.py --file samples/live20.h264 --snap out.png --snap-frames 120   # 无窗口抓帧自检
-# 依赖：numpy opencv-python；ffmpeg（仓库 bin 内或 PATH）；adb 连接相机
+# 依赖：numpy opencv-python；ffmpeg（环境变量 FFMPEG 或 PATH）；adb 连接相机
 # 原理：相机端 lv_relay.py 组好双鱼眼 H264 帧 -> TCP:5010 -> 本机 ffmpeg 解码 -> 显示
 #       控制台 TCP:5011 可发 stat/kick/rehand/ackn/reqms/kf 等命令
 import socket, struct, subprocess, threading, sys, os, time, queue, argparse, shutil
@@ -11,12 +11,10 @@ import numpy as np
 import cv2
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-FF = os.path.join(ROOT, "bin", "ffmpeg-master-latest-win64-gpl-shared", "bin", "ffmpeg.exe")
-if not os.path.exists(FF):
-    FF = shutil.which("ffmpeg") or "ffmpeg"
-# adb 查找顺序：PATH -> 本机已知安装路径 -> 字面 "adb"（失败时给清晰提示而不是崩栈）
-_KNOWN_ADB = r"E:\123pan\Downloads\DJIAc5P_UI_Debian-master\DJIAc5P_UI_Debian-master\adb\adb.exe"
-DEFAULT_ADB = shutil.which("adb") or (_KNOWN_ADB if os.path.exists(_KNOWN_ADB) else "adb")
+# ffmpeg：环境变量 FFMPEG → PATH → 字面 "ffmpeg"（外部二进制，非 pip 包）
+FF = os.environ.get("FFMPEG") or shutil.which("ffmpeg") or "ffmpeg"
+# adb：环境变量 ADB → PATH → 字面 "adb"（失败时给清晰提示而不是崩栈）
+DEFAULT_ADB = os.environ.get("ADB") or shutil.which("adb") or "adb"
 W, H = 2048, 1024
 FRAME_BYTES = W * H * 3
 
@@ -39,8 +37,8 @@ def adb_forward():
                 print("  [警告] adb forward %d 失败: %s" % (p, (r.stderr or b"").decode("utf-8", "ignore").strip()))
         except FileNotFoundError:
             raise SystemExit(
-                "找不到 adb：请用 --adb \"完整路径\\adb.exe\" 指定，或把 adb 加入 PATH。\n"
-                "  cannot find adb / pass --adb \"<path>\\adb.exe\" or add adb to PATH")
+                "找不到 adb：请用 --adb 完整路径指定，或把 adb 加入 PATH。\n"
+                "  cannot find adb / pass --adb <path>\adb.exe or add adb to PATH")
         except (subprocess.TimeoutExpired, OSError) as e:
             print("  [警告] adb forward %d 异常: %s" % (p, e))
 
@@ -132,8 +130,8 @@ class Preview:
             if low == "help":
                 print("=== 状态与流控 ===")
                 print("  stat       相机端统计（big/ok/drop/gap/idr/clients）")
-                print("  ackn <n>   ACK 批量计数（默认4；实测 1 最稳，帧率可到 25fps）")
-                print("  reqms <s>  周期请求间隔（默认0.052 秒；实测 0.03 更稳）")
+                print("  ackn <n>   ACK 批量计数（默认 4）")
+                print("  reqms <s>  周期请求间隔（默认 0.052 秒）")
                 print("=== 关键帧 / 握手 ===")
                 print("  kick       重启 camera3 并重握手（逼 IDR）")
                 print("  rehand     仅重发握手")
