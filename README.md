@@ -59,7 +59,7 @@ sh probe/build.sh
 - [快速上手（中文）](docs/00_START_HERE.zh.md) · [Start Here (English)](docs/00_START_HERE.en.md)
 - [状态与里程碑（中文）](docs/01_STATUS.zh.md) · [Status (English)](docs/01_STATUS.en.md)
 - [预览详细文档（中文）](docs/preview-guide.zh.md) · [Detailed Guide (English)](docs/preview-guide.en.md)
-- [轮次归档](docs/archive/)：早期逆向记录（中文，未提供英文译本）
+- [轮次归档](docs/archive/)：早期逆向记录，中英成对（`.zh.md` / `.en.md`）；部分早期脚本未随仓库发布
 
 ## 依赖
 
