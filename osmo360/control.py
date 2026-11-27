@@ -2,11 +2,15 @@
 # -*- coding: utf-8 -*-
 """control —— 相机全参数控制（封装设备端 camtool.py）
 
-camtool.py 已在设备上验证：通过官方 libdcam_camera_service_client.so 读写参数，
-子进程隔离 + 安全黑名单（扬声器/提示音/重启/格式化一律拒绝）。
-本模块只做 Python 封装，不重复实现 API 调用。
+本模块是 Python 侧薄封装：参数读写通过设备端 `camtool.py` 调用官方
+libdcam 客户端完成，PC 侧只做命令拼装与安全黑名单拦截。
 
-只有副作用小的参数类；危险操作仍由设备端 camtool 的黑名单兜底。
+TODO(设备端脚本未随仓库发布)：`camtool.py` 不在本仓库内（见 probe/README.md
+“未随仓库发布的设备端脚本”）。本模块可以正常 import；只有真正调用
+`dump/modes/get/set/...` 等方法时，才要求目标设备上已存在该脚本。
+本地离线分析路径不依赖本模块。
+
+安全黑名单（扬声器/提示音/重启/格式化等）在 PC 侧再拦一道。
 """
 import re
 
@@ -61,10 +65,17 @@ class CameraControl:
 
     @staticmethod
     def known_getters():
-        """从 camtool.py 源码提取 getter 名（设备侧或本地副本）。"""
+        """从 camtool.py 源码提取 getter 名（设备侧或本地副本）。
+
+        TODO: 本地副本 probe/camtool.py 未随仓库发布；本方法在缺少该文件时
+        会抛出 FileNotFoundError，仅在自备设备端脚本后可用。
+        """
         import os
         local = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              "probe", "camtool.py")
+        if not os.path.exists(local):
+            raise FileNotFoundError(
+                "probe/camtool.py 未随仓库发布；known_getters() 需要自备该脚本副本")
         text = open(local, encoding="utf-8").read()
         m = re.search(r"KNOWN_GETTERS\s*=\s+\"\"\"(.*?)\"\"\"", text, re.S)
         return m.group(1).split() if m else []
