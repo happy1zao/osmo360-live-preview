@@ -11,6 +11,7 @@
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -20,8 +21,8 @@ sys.path.insert(0, ROOT)
 os.chdir(ROOT)
 from osmo360 import live as live_mod
 
-ADB = r"E:\123pan\Downloads\DJIAc5P_UI_Debian-master\DJIAc5P_UI_Debian-master\adb\adb.exe"
-SER = "123456789ABCDEF"
+ADB = os.environ.get("ADB") or shutil.which("adb") or "adb"
+SER = os.environ.get("ADB_SERIAL")  # None = single device, omit -s
 SECS = float(os.environ.get("SECS", "60"))
 
 BASE_ENV = ("LIVE_CUT=0 LIVE_LOOP_TO=54.0 LIVE_CYCLE_FROM=6.30 LIVE_CYCLE_TO=54.0 "
@@ -39,7 +40,8 @@ if os.environ.get("ARMS"):
 
 
 def adb(*a, t=60):
-    r = subprocess.run([ADB, "-s", SER] + list(a), capture_output=True, text=True, timeout=t)
+    prefix = [ADB] + (["-s", SER] if SER else [])
+    r = subprocess.run(prefix + list(a), capture_output=True, text=True, timeout=t)
     return (r.stdout + r.stderr).strip()
 
 
