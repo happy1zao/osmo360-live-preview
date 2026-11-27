@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 """audio —— Osmo 360 四麦实时音频采集
 
-设备侧实测（docs/86、docs/33）：
+以下设备侧音频格式来自早期轮次记录（docs/86、docs/33 未收录于本仓库）：
   PulseAudio source `regular0.audio-processing` = s24-32le / 4ch / 48000Hz
   通道映射 front-left / front-right / side-left / side-right。
   用 `parec`（只录不播，不发声）采集，无需 UVC/UAC。
+
+TODO(设备侧路径)：start_camera_capture / pull / stream_forward 在设备上执行；
+decode / decode_bytes / rms / tdoa 是本地静态分析，对取回的 raw 字节流即可运行，
+不依赖在线设备。模块可以正常 import。
 
 用法：
   # 相机端后台采集到文件（PPID=1 不被 adb 回收）
