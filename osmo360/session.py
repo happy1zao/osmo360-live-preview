@@ -2,19 +2,22 @@
 # -*- coding: utf-8 -*-
 """session —— 脱手机自建会话：设备端一键「连接中重启拿 IDR」实验/预览
 
-原理（docs/79 · 81 §5.4，实测有效）：
+以下原理与前置条件来自早期逆向轮次记录（历史结论，未在本仓库环境复核）：
   * 编码器只在实例创建第一帧吐一次 SPS+PPS+IDR（idr_interval=1000000）。
-  * 因此先让我们的会话连上（lv_fix 重放握手 + 周期请求），
-    再 systemctl restart dji_camera3 让实例在有消费者在场时重建，
-    那唯一一次 IDR 就落进我们的抓包。
-
-硬前置（实测确认，软件层无法绕过）：
-  相机屏幕必须处于录像/拍照取景界面。停在设置页/QS 页时
-  transmit 层不路由任何视频流。
+  * 先让会话连上（lv_fix 重放握手 + 周期请求），再重启相机编码器进程，
+    让实例在有消费者在场时重建，那唯一一次 IDR 落进抓包。
+  * 相机屏幕需处于录像/拍照取景界面；停在设置页/QS 页时
+    transmit 层不路由视频流（历史记录结论）。
 
 安全边界：
   * 只 restart dji_sw_uav / dji_camera3（局部、自动恢复）
   * 绝不 restart dji_media（整机挂死）；绝不 reboot
+
+TODO(设备端脚本未随仓库发布)：本模块的 capture_idr / capture_selfhost
+依赖设备端 `exp_idr.sh`、`replay_up.py`、`expI_final.sh`，这些脚本不在
+本仓库内（见 probe/README.md“未随仓库发布的设备端脚本”）。模块可以正常
+import；只有真正调用上述捕获方法时才要求设备上已存在对应脚本。本地离线
+解码路径不经过本模块。
 """
 import os, time
 
@@ -29,6 +32,8 @@ GATE_OFF = "/data/local/tmp/gate_off.py"
 EXP_REMOTE = "/data/local/tmp/exp_idr.sh"
 REPLAY_REMOTE = "/data/local/tmp/replay_up.py"
 EXP2_REMOTE = "/data/local/tmp/expI_final.sh"
+# TODO: 以上三个设备端脚本（exp_idr.sh / replay_up.py / expI_final.sh）
+# 未随仓库发布；以下捕获方法仅在自备脚本后可运行。
 
 
 class DevSession:
@@ -60,6 +65,7 @@ class DevSession:
         """一键捕获：gate → push → restart dji_sw_uav → 会话 → kick → 取回 pcap。
 
         返回本地 pcap 路径；失败返回 None。progress(可选): 回调设备端进度日志。
+        TODO: 依赖未发布的 exp_idr.sh，见模块头注释。
         """
         if not self.check_device():
             raise RuntimeError("相机不在线（adb devices 无 %s）" % self.adb.serial)
@@ -98,6 +104,7 @@ class DevSession:
 
         握手样本必须是包含握手后全部 DUML 配置/注册/保活长命令的冷启动抓包。
         返回本地 pcap 路径；失败返回 None。
+        TODO: 依赖未发布的 replay_up.py / expI_final.sh，见模块头注释。
         """
         if not self.check_device():
             raise RuntimeError("相机不在线（adb devices 无 %s）" % self.adb.serial)
@@ -152,7 +159,7 @@ class DevSession:
     def stream_stats(self):
         """读取相机端中继统计（若 lv_relay 在跑）。"""
         _, out = self.adb.sh(
-            "printf 'stat\\n' | timeout 3 python3 -c \""
+            "printf 'stat\n' | timeout 3 python3 -c \"
             "import socket;s=socket.create_connection(('127.0.0.1',5011),2);"
-            "s.sendall(b'stat\\n');print(s.recv(4096).decode())\" 2>/dev/null", timeout=15)
+            "s.sendall(b'stat\n');print(s.recv(4096).decode())\" 2>/dev/null", timeout=15)
         return out.strip()
