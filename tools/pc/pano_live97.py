@@ -29,21 +29,23 @@
 ----
     python pano_live97.py                 # 体检 + 起会话 + ffplay 实时预览
     python pano_live97.py --once          # 只跑一段（窗口关掉即退出）
-    python pano_live97.py --dump 8        # 不起窗口，直接落 8 张 PNG 到 samples\\rec\\live
+    python pano_live97.py --dump 8        # 不起窗口，直接落 8 张 PNG 到 samples/rec/live
     python pano_live97.py --stop          # 只停会话
 """
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import time
 
-ADB = r"E:\123pan\Downloads\DJIAc5P_UI_Debian-master\DJIAc5P_UI_Debian-master\adb\adb.exe"
-SERIAL = "123456789ABCDEF"
+ADB = os.environ.get("ADB") or shutil.which("adb") or "adb"
+SERIAL = os.environ.get("ADB_SERIAL")  # None = single device, omit -s
 HERE = os.path.dirname(os.path.abspath(__file__))
-BIN = os.path.normpath(os.path.join(HERE, "..", "..", "bin", "ffmpeg-master-latest-win64-gpl-shared", "bin"))
-FFPLAY = os.path.join(BIN, "ffplay.exe")
-FFMPEG = os.path.join(BIN, "ffmpeg.exe")
+# ffmpeg/ffplay 走环境变量或 PATH；仓库不附带外部二进制。
+FFPLAY = os.environ.get("FFPLAY") or shutil.which("ffplay") or "ffplay"
+FFMPEG = os.environ.get("FFMPEG") or shutil.which("ffmpeg") or "ffmpeg"
+# 探针 .so 需先用 probe/build.sh 在本地编译，再由本脚本推到设备。
 HOOK_LOCAL = os.path.normpath(os.path.join(HERE, "..", "..", "probe", "probe97.so"))
 HOOK_REMOTE = "/usr/lib/libdcam_hook.so"
 PORT_LOCAL, PORT_DEV = 18888, 8888
@@ -52,7 +54,8 @@ CASE_NAME = "pano_hold_record"
 
 
 def adb(*args, timeout=40, check=False):
-    r = subprocess.run([ADB, "-s", SERIAL, *args], capture_output=True, text=True, timeout=timeout)
+    prefix = [ADB] + (["-s", SERIAL] if SERIAL else [])
+    r = subprocess.run(prefix + list(args), capture_output=True, text=True, timeout=timeout)
     if check and r.returncode != 0:
         raise RuntimeError(f"adb {args} -> {r.returncode}: {r.stderr.strip()}")
     return r
@@ -91,7 +94,8 @@ def heal_storage():
 
 # ---------------------------------------------------------------- 钩子部署
 def ensure_hook():
-    """md5 一致就跳过；不一致则把本地 probe97.so 推进去（需要 remount rw）。"""
+    """md5 一致就跳过；不一致则把本地 probe97.so 推到 /data/local/tmp，
+    用 bind mount 覆盖 /usr/lib/libdcam_hook.so（不 remount 根分区 rw）。"""
     if not os.path.isfile(HOOK_LOCAL):
         print(f"[hook] 本地 {HOOK_LOCAL} 不存在，跳过部署（假定设备上已是 probe97）")
         return
@@ -104,8 +108,8 @@ def ensure_hook():
         return
     print("[hook] 部署 probe97")
     adb("push", HOOK_LOCAL, "/data/local/tmp/probe97.so", check=True)
-    sh(f"mount -o remount,rw /; cp -f /data/local/tmp/probe97.so {HOOK_REMOTE}; "
-       f"mount -o remount,ro /; systemctl reset-failed dji_camera3.service; "
+    sh(f"mount --bind /data/local/tmp/probe97.so {HOOK_REMOTE}; "
+       f"systemctl reset-failed dji_camera3.service; "
        f"systemctl restart dji_camera3.service")
     time.sleep(14)
 
