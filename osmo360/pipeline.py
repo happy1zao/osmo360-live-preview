@@ -3,9 +3,14 @@
 """pipeline —— 一键串联：给美学感知模型输出 2:1 双鱼眼 numpy 帧
 
 三种工作模式：
-  offline(pcap)   从已抓好的 pcap 逐帧解码（稳定、可复现、模型输入首选）
-  dev_capture()   脱手机自建会话抓 IDR → 离线出帧（需相机屏幕处于取景界面）
-  start_watch()   相机端守株待兔，抓手机 Mimo 会话首帧 IDR → 出帧
+  offline(pcap)   从已抓好的 pcap / 裸 h264 逐帧解码（本地离线路径，不连设备）
+  dev_capture()   脱手机自建会话抓 IDR → 离线出帧（设备侧路径）
+  start_watch()   相机端守株待兔，抓手机 Mimo 会话首帧 IDR → 出帧（设备侧路径）
+
+TODO(设备侧路径)：dev_capture / start_watch / collect_watch / live_frames /
+capture_audio 都需要在线设备与对应设备端脚本（见 session.py、probe/README.md
+未发布清单）；本仓库可验证的本地路径只有 offline_frames，输入自备 pcap /
+h264。模块可以正常 import，不调用设备侧方法即不要求 adb 与设备在线。
 
 使用者（美学模型）只需：
     from osmo360 import Pipeline
@@ -53,7 +58,8 @@ class Pipeline:
 
     # ---------- 脱手机自建会话 ----------
     def dev_capture(self, handshake_pcap=None, out_pcap="samples/live_selfhost.pcap", secs=55):
-        """一键脱手机抓流：推样本→完整上行重放→连接中重启→取回 pcap→解出双鱼眼帧。"""
+        """一键脱手机抓流：推样本→完整上行重放→连接中重启→取回 pcap→解出双鱼眼帧。
+        TODO: 设备侧路径，依赖 session.py 中未随仓库发布的设备端脚本。"""
         hs = handshake_pcap or os.path.join(ROOT, "samples", "mimo_cold_handshake.pcap")
         got = self.dev.capture_selfhost(hs, out_pcap, secs=secs)
         if not got:
