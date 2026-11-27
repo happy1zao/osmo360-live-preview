@@ -61,7 +61,7 @@ steps and rollback are in [`probe/README.md`](probe/README.md).
 - [Start Here (ZH)](docs/00_START_HERE.zh.md) · [Start Here (English)](docs/00_START_HERE.en.md)
 - [Status (ZH)](docs/01_STATUS.zh.md) · [Status (English)](docs/01_STATUS.en.md)
 - [Detailed Guide (ZH)](docs/preview-guide.zh.md) · [Detailed Guide (English)](docs/preview-guide.en.md)
-- [Round archives](docs/archive/): early reverse-engineering logs (Chinese only)
+- [Round archives](docs/archive/): early reverse-engineering logs, paired ZH/EN (`.zh.md` / `.en.md`); some early scripts referenced there are not shipped with this repo
 
 ## Dependencies
 
