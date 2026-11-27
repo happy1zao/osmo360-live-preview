@@ -47,7 +47,7 @@ sysmode_resource_lock_release: type->2, host_id->0x0100, name->APP
 |---|---|---|
 | `dji_cst` | `LD_LIBRARY_PATH=/usr/lib LD_PRELOAD=libdcam_hook.so dji_cst -m <序列名> -L 60` | ✅ 能跑：`CST_RLT:duss_rec_mode_switch: PASSED`，CamX 真的重配了流 |
 | `dji_cst` DUSS 发送 | 内部 `duss_event_send_sync` | ❌ `failed:-1003`（目标 host 不在线） |
-| `dji_shell` | `duss_shell [config_id] dump/ping/msg_send ...` | ❌ 初始化就失败：`duss_mb_create_route_table error: -1001`（`shell` 服务没在 `/system/etc/dji.json` 里登记） |
+| `duss_shell` | `duss_shell [config_id] dump/ping/msg_send ...` | ❌ 初始化就失败：`duss_mb_create_route_table error: -1001`（`shell` 服务没在 `/system/etc/dji.json` 里登记） |
 
 `/system/etc/cst_cases.json` 是宝库：**203 条序列**，其中 24 条是 `duss_liveview_*`，
 覆盖 6000x3000 / 7680x3840 全景、3840x1920 半全景，帧率从 p24 到 p240（例如 `..._pano_video_p25`）。
