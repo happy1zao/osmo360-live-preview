@@ -51,3 +51,7 @@ bind mount 仅当前会话有效，重启设备后自动复原。
 `osmo360/control.py` 引用的设备端 `camtool.py`，以及 `osmo360/session.py`
 引用的 `exp_idr.sh`、`replay_up.py`、`expI_final.sh`，属于设备侧实验脚本，
 **未包含在本仓库内**；相关封装仅在对应方法被调用时才会用到，不影响包的导入。
+
+历史轮次记录中提到的 `hook_probe93.c` / `hook_probe95.c` / `hook_probe96.c`
+等失败实验变体也未随仓库发布；仓库内仅保留最终版 `hook_probe97.c`。
+编译产物 `probe/libdcam_hook.so` 由 `build.sh` 本地生成，不入库。
