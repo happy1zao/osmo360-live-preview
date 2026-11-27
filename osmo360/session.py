@@ -158,8 +158,11 @@ class DevSession:
     # ---------- 连续预览（拿到 IDR 后续 P 帧即可持续解码） ----------
     def stream_stats(self):
         """读取相机端中继统计（若 lv_relay 在跑）。"""
-        _, out = self.adb.sh(
-            "printf 'stat\n' | timeout 3 python3 -c \"
-            "import socket;s=socket.create_connection(('127.0.0.1',5011),2);"
-            "s.sendall(b'stat\n');print(s.recv(4096).decode())\" 2>/dev/null", timeout=15)
+        script = (
+            "import socket\n"
+            "s=socket.create_connection(('127.0.0.1',5011),2)\n"
+            "s.sendall(b'stat\n')\n"
+            "print(s.recv(4096).decode())\n"
+        )
+        _, out = self.adb.sh("python3 - <<'PY'\n%s\nPY" % script, timeout=15)
         return out.strip()
