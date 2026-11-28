@@ -1,4 +1,4 @@
-# osmo360-live-preview
+# Prosmo360
 
 Toolkit for the Osmo 360 (first generation) 2:1 dual-fisheye live preview and offline analysis:
 get the camera's preview stream on a PC — no phone app, no screen capture, no filming of a screen.
